@@ -1,4 +1,5 @@
 #include <fcntl.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -8,26 +9,22 @@
 #include <sys/types.h>
 #include <sys/unistd.h>
 
-#include <freertos/FreeRTOS.h>
-#include <freertos/task.h>
-
 #include <libretro.h>
 #include <core_api.h>
 #include <argent_loader.h>
 
 extern void frontend_log_cb(enum retro_log_level level, const char *tag, const char *fmt, ...);
+extern uint32_t get_time_ms(void);
 
 void *core_buffer = (void*)CORE_LOAD_ADDR;
 struct retro_header_t core_header;
 struct retro_core_t core_api;
 
-bool load_core(const char *core) {
+bool load_core(const char *core_path) {
     memset(core_buffer, 0, CORE_LOAD_SIZE);  // Clear the 16 MB core section
-	char file_path[MAXPATH];
-	snprintf(file_path, sizeof(file_path), "%s/%s.mars", CORES_DIRECTORY, core);
-	FILE *hfile = fopen(file_path, "rb");
+	FILE *hfile = fopen(core_path, "rb");
 	if (!hfile) {
-		frontend_log_cb(RETRO_LOG_ERROR, "FRONTEND" ,"Error opening core file=%s\n", file_path);
+		frontend_log_cb(RETRO_LOG_ERROR, "FRONTEND" ,"Error opening core file=%s\n", core_path);
 		abort();
 	}
 
@@ -53,7 +50,7 @@ bool load_core(const char *core) {
 		.kill = kill,
 		.getpid = getpid,
 		.gettimeofday = gettimeofday,
-		.xTaskGetTickCount = xTaskGetTickCount,
+		.get_time_ms = get_time_ms,
 		.open = open,
 		.close = close,
 		.write = write,
