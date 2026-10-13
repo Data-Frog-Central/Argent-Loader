@@ -5,14 +5,14 @@ cflags-y += -I$(srctree) -I$(srctree)/argent-cores/include
 
 target-y += libargent_loader.a
 
-obj-$(BR2_PACKAGE_ARGENT_LOADER) += argent_loader.o
+obj-$(BR2_PACKAGE_ARGENT_LOADER) += argent_loader.o argent_stubs.o
 
 all: $(target-y)
 
-argent_loader.o: $(srctree)/argent_loader.c
+%.o: $(srctree)/%.c
 	$(Q)$(CC) $(cflags-y) $(CFLAGS) -c $< -o $@
-
-libargent_loader.a: argent_loader.o
+	
+libargent_loader.a: argent_loader.o argent_stubs.o
 	$(Q)$(AR) -rc $@ $^
 
 install: FORCE
