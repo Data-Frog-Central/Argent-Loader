@@ -16,23 +16,70 @@
 extern void frontend_log_cb(enum retro_log_level level, const char *tag, const char *fmt, ...);
 extern uint32_t get_time_ms(void);
 
+#define CORE_TYPE_LIBRETRO 0x0001
+#define CORE_TYPE_SDL12 0x0002
+
+#define CORE_VER_MAJOR 1
+#define CORE_VER_MINOR 0
+
 void *core_buffer = (void*)CORE_LOAD_ADDR;
-struct retro_header_t core_header;
 struct retro_core_t core_api;
+
+static bool check_argent_file(mars_header_t *mars_hdr) {
+	// 1. Validate Magic Signature
+    if (memcmp(mars_hdr->magic, "MARS", 4) != 0) {
+        frontend_log_cb(RETRO_LOG_ERROR, "CORE_LOADER", "Invalid MARS magic signature\n");
+        return false;
+    }
+
+    // 2. Validate Major Version
+    if (mars_hdr->version_major != CORE_VER_MAJOR) {
+        frontend_log_cb(RETRO_LOG_ERROR, "CORE_LOADER", "Incompatible core version: got %d.%d, expected %d.x\n", mars_hdr->version_major, mars_hdr->version_minor, CORE_VER_MAJOR);
+        return false;
+    }
+
+    // 3. Validate Core Type
+    if (mars_hdr->core_type != CORE_TYPE_LIBRETRO) {
+        frontend_log_cb(RETRO_LOG_ERROR, "CORE_LOADER", "Unsupported core type: 0x%04X\n", mars_hdr->core_type);
+        return false;
+    }
+
+	return true;
+}
 
 bool load_core(const char *core_path) {
     memset(core_buffer, 0, CORE_LOAD_SIZE);  // Clear the 16 MB core section
 	FILE *hfile = fopen(core_path, "rb");
 	if (!hfile) {
 		frontend_log_cb(RETRO_LOG_ERROR, "FRONTEND" ,"Error opening core file=%s\n", core_path);
-		abort();
+		return false;
 	}
 
 	fseeko(hfile, 0, SEEK_END);
-	long core_size = ftell(hfile);
+	off_t core_size = ftello(hfile);
 	fseeko(hfile, 0, SEEK_SET);
 
-	fread(core_buffer, 1, core_size, hfile);
+	mars_header_t mars_hdr;
+    if (fread(&mars_hdr, 1, sizeof(mars_header_t), hfile) != sizeof(mars_header_t)) {
+        frontend_log_cb(RETRO_LOG_ERROR, "CORE_LOADER", "Failed to read core header\n");
+        fclose(hfile);
+        return false;
+    }
+
+    if (!check_argent_file(&mars_hdr)) {
+        fclose(hfile);
+        return false;
+    }
+	frontend_log_cb(RETRO_LOG_INFO, "CORE_LOADER", "MARS v%d.%d (Type: 0x%04X) parsed\n", 
+                    mars_hdr.version_major, mars_hdr.version_minor, mars_hdr.core_type);
+
+	fseeko(hfile, 0, SEEK_SET);
+	size_t bytes_read = fread(core_buffer, 1, core_size, hfile);
+	if (bytes_read != (size_t)core_size) {
+    	frontend_log_cb(RETRO_LOG_ERROR, "CORE_LOADER", "Failed to read full core file\n");
+        fclose(hfile);
+        return false;
+    }
 	fclose(hfile);
 
 	struct frontend_functions_t frontend_funcs = {
@@ -63,14 +110,9 @@ bool load_core(const char *core_path) {
 		.readdir = readdir 
 	};
 
-	core_entry_t core_entry = core_buffer;
-	core_header = *core_entry(&frontend_funcs);
+	core_entry_t core_entry = (core_entry_t)(uintptr_t)mars_hdr.entry_point;
+	core_api = *core_entry(&frontend_funcs);
 
-	if ((core_header.magic == CORE_API_MAGIC) && (core_header.version == CORE_API_VERSION)) {
-		core_api = core_header.core_exports;
-		frontend_log_cb(RETRO_LOG_INFO, "CORE_LOADER" ,"Load success\n");
-		return true;
-	}
-	frontend_log_cb(RETRO_LOG_INFO, "CORE_LOADER" ,"Load failed: core is either too old or for another system\n");
-	return false;
+	frontend_log_cb(RETRO_LOG_INFO, "CORE_LOADER" ,"Load success\n");
+	return true;
 }
