@@ -3,9 +3,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include <unistd.h>
 #include <sys/stat.h>
 #include <sys/time.h>
+#include <sys/times.h>
 #include <sys/types.h>
 #include <sys/unistd.h>
 
@@ -83,28 +85,42 @@ bool load_core(const char *core_path) {
 	fclose(hfile);
 
 	struct frontend_functions_t frontend_funcs = {
+//      Logging      //
 		.printf = printf,
 		.frontend_log_cb = frontend_log_cb,
+//      System Calls    //
 		._exit = _exit,
 		.abort = abort,
+		.kill = kill,
+		.getpid = getpid,
+//      Memory Management     //
 		.malloc = malloc,
 		.memset = memset,
 		.free = free,
 		.calloc = calloc,
 		.realloc = realloc,
+//      Time Functions      //
+		.get_time_ms = get_time_ms,
+		.gettimeofday = gettimeofday,
+		.times = times,
+//      File System     //
 		.stat = stat,
 		.fstat = fstat,
-		.kill = kill,
-		.getpid = getpid,
-		.gettimeofday = gettimeofday,
-		.get_time_ms = get_time_ms,
+		.access = access,
+		.mkdir = mkdir,
+		.rmdir = rmdir,
+		.rename = rename,
+		.chdir = chdir,
+		.getcwd = getcwd,
+		.unlink = unlink,
+//      I/O Operations      //
 		.open = open,
 		.close = close,
 		.write = write,
 		.read = read,
 		.isatty = isatty,
 		.lseek = lseek,
-		.unlink = unlink,
+//      Dirent      //
 		.opendir = opendir,
 		.closedir = closedir,
 		.readdir = readdir 
